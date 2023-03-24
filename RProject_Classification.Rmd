@@ -1,0 +1,204 @@
+---
+title: "Project 1 Part 2: Classification"
+subtitle: "4375 Machine Learning with Dr. Mazidi"
+author: "Ali Hilal"
+date: "March 31, 2022"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+*** This notebook discusses suicide, this is just a warning in case this is a sensitive topic to read / think about ***
+
+For the second part of this project, I am analyzing data in a data set using classification algorithms. This is the link where I got the data from, titled: WHO Suicide Statistics
+
+https://www.kaggle.com/datasets/szamil/who-suicide-statistics
+
+In the original data set, there are 6 columns and 43,776 rows.
+
+##The Data Set
+
+```{r}
+sdf <- read.csv("who_suicide_statistics.csv")
+```
+
+This is reading in the data from the file "who_suicide_statistics.csv".
+
+##Data Cleaning:
+
+I am applying some data cleaning techniques to the data set. First, I am renaming the columns for a cleaner look as well as easier understanding. Secondly, I am renaming the values "5-14 years" to "05-14 years". I will explain why in a second. Next, I remove all instances of N/A data so we can have complete data. I also arrange the data in descending order of year, gender and age group. This is where changing the values from "5-14 years" to "05-14 years" plays its role. Now, with the age 05 at the beginning of the string, this age group appears first in the data set, as apposed to 5th before the change. Lastly, I changed the gender, country, and age group variables to factors for easier data computation. 
+
+
+```{r}
+library(tidyverse)
+names(sdf) <- c("Country", "Year", "Gender", "Age_Group", "Number_of_Suicides", "Population")
+sdf[sdf == "5-14 years"] <- "05-14 years"
+sdf <- sdf[complete.cases(sdf), ]
+invisible(sdf %>% arrange(Year, Gender, Age_Group))
+sdf$Gender <- as.factor(sdf$Gender) #Female = 1; Male = 2
+sdf$Age_Group <- as.factor(sdf$Age_Group)
+sdf$Country <- as.factor(sdf$Country)
+```
+
+##Data Exploration:
+
+A small introduction to the data set we are working with. Here there is the first and last 6 elements in the data set are displayed, a summary of the data, and every column with the name and the data type. 
+
+```{r}
+head(sdf, 6)
+tail(sdf, 6)
+summary(sdf)
+str(sdf)
+```
+
+A graph of the number of suicides in each age group. The numbers increase from the age groups of 05-14 until 35-54, which sees a huge spike. Then a equally sharp decrease in the numbers in the last two groups of 55-74 and 75+. 
+
+```{r}
+plot(sdf$Age_Group, sdf$Number_of_Suicides)
+```
+
+Here is a graph with the number of suicides per country. It is hard to make out what is being displayed here, however it is really interesting to look at. It also begs the question, what instance is that extremely large spike, and where? That question is answered under this graph. 
+
+```{r}
+barplot(height=sdf$Number_of_Suicides, names=sdf$Country)
+```
+```{r}
+sdf[which.max(sdf$Number_of_Suicides),]
+```
+
+
+```{r}
+plot(sdf$Year, sdf$Number_of_Suicides)
+```
+
+One more graph to display the number of suicides per year. It is interesting to see that there is a spike between the years 1991 and 2001. 
+
+##Logistic Regression:
+
+With logistic regression, I created two models, a male model and a female model. When I factor the male data set, I set male as 1 and female as 0. Using that data set, I split the data into train and test and generate my male Logistic regression model. 
+
+```{r}
+set.seed(1234)
+options(warn=-1)
+sdfMale <- sdf
+sdfMale$Gender <- as.factor(ifelse(sdfMale$Gender == "male", 1, 0))
+split1 <- sample(1:nrow(sdfMale), nrow(sdfMale)*0.75, replace=FALSE)
+maletrain <- sdfMale[split1, ]
+maletest  <- sdfMale[-split1, ]
+maleglm <- glm(Gender~.-Year, data = maletrain, family = "binomial")
+par(mfrow=c(2,2))
+plot(maleglm)
+```
+These are graphs made using the Logistic Regression Model
+  Residuals VS Fitted: We want to see a straight, red line, and we can see that there is a small bend at the very beginning,                        but after that its is straight. 
+  Normal Q-Q: We want to see a straight line that sits right along the dotted line, and we see that right until the end with               a large number of outliers.
+  Scale- Location: We want to see a horizontal line  with evenly spaced data on both sides, however we do not see that.
+  Residuals VS Leverage: This graphs says what leverage points are influencing the line of regression.
+
+```{r}
+maleprobs <- predict(maleglm, newdata = maletest)
+malepred <- ifelse(maleprobs > 0.5, 1, 0)
+maleacc <- mean(malepred == maletest$Gender)
+print(paste("Male Accuracy: ", maleacc))
+options(warn=0)
+```
+
+When I factor the female data set, I set female as 1 and male as 0. Using that data set, I split the data into train and test and generate my female Logistic regression model. 
+
+```{r}
+options(warn=-1)
+sdfFemale <- sdf
+sdfFemale$Gender <- as.factor(ifelse(sdfFemale$Gender == "female", 1, 0))
+split2 <- sample(1:nrow(sdfFemale), nrow(sdfFemale)*0.75, replace=FALSE)
+femaletrain <- sdfFemale[split2, ]
+femaletest  <- sdfFemale[-split2, ]
+femaleglm <- glm(Gender~.-Year, data = femaletrain, family = "binomial")
+par(mfrow=c(2,2))
+plot(femaleglm)
+```
+
+The results of the graph are basically the same as the male, just mirrored onto the other side. 
+
+```{r}
+femaleprobs <- predict(femaleglm, newdata = femaletest)
+femalepred <- ifelse(femaleprobs > 0.5, 1, 0)
+femaleacc <- mean(femalepred == femaletest$Gender)
+print(paste("Female Accuracy: ", femaleacc))
+options(warn=0)
+```
+
+The reason why I made two  models is I wanted to see if there would be a difference in which Gender I used to make the model. The results came back with the female model having a slightly higher accuracy than the male, showing that even though the change was minute, both models did not yield the same results. 
+
+##Naive Bayes
+
+I divided the data set into train and test and used it to build the Naive Bayes model.
+
+```{r}
+library(e1071)
+set.seed(1234)
+split1 <- sample(1:nrow(sdf), nrow(sdf)*0.75, replace=FALSE)
+train <- sdf[split1, ]
+test  <- sdf[-split1, ]
+nbsdf <- naiveBayes(Gender~., data = train)
+nbsdf
+```
+
+```{r}
+nbpred <- predict(nbsdf, newdata = test, type = "class")
+nbacc <- mean(nbpred == test$Gender)
+print(paste("Accuracy: ", nbacc))
+```
+
+The accuracy of this model came out to 53%, which is a little less than that of the logistic regression models.
+
+
+##SVM:
+
+Lastly, the SVM model. First, I am trying to find the best value for cost. To do so, I split the data into train, test and validation and using those set to tune and find the best cost. 
+
+```{r}
+library(e1071)
+set.seed(1234)
+index <- sample(seq(1, 3), size = nrow(sdf), replace = TRUE, prob = c(0.8, 0.1, 0.1))
+train <- sdf[index == 1, ]
+test <- sdf[index == 2, ]
+validation <- sdf[index == 3, ]
+stune <- tune(svm, Gender~., data = validation, kernel = "linear", ranges = list(cost = c(0.001, 0.01, 0.1, 1, 5, 10, 100)))
+summary(stune)
+```
+
+For some reason, the best parameter remained empty and I couldnt find the best value for cost. So, I used a random value, 100.
+
+```{r}
+ssvm <- svm(Gender~., data = train, kernal = "linear", cost = 100, scale = TRUE)
+summary(ssvm)
+```
+
+
+```{r}
+pred <- predict(ssvm, newdata = test)
+table(pred, test$Gender)
+```
+
+
+
+```{r}
+svmacc <- mean(pred == test$Gender)
+print(paste("Accuracy: ", svmacc))
+```
+
+
+Results:
+
+The ranking for the best to worst algorithms for this particular data set is as follows:
+
+1. SVM with cost 100
+2. Both Logistic Regression Models
+3. Naive Bayes
+
+SVM performed the best for this data set. It had the highest accuracy with 71%. The logistic regression models came second with the female model having an accuracy of 58% and male model with an accuracy of 57%. Lastly, the Naive Bayes model with an accuracy of 53%. 
+
+Overall, these three algorithms did an alright job at classifying the data. SVM easily did the best job out of the three. If there is one thing that I would want to look into more, is why the tuning for SVM didn't return a best cost value. 
+
+

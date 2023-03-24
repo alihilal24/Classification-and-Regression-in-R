@@ -1,0 +1,239 @@
+---
+title: "Project 1 Part 1: Regression"
+subtitle: "4375 Machine Learning with Dr. Mazidi"
+author: "Ali Hilal"
+date: "March 31, 2022"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+For the first part of this project, I am analyzing data in a data set using regression algorithms. This is the link where I got the data from, titled: Stellar Classification Data set - SDSS17
+
+https://www.kaggle.com/datasets/fedesoriano/stellar-classification-dataset-sdss17
+
+In the original data set, there are 18 columns and 100,000 rows.
+
+
+##Reading in data: 
+
+```{r}
+sdf <- read.csv("star_classification.csv")
+str(sdf)
+```
+
+##Data cleaning:
+
+I begin cleaning this data by removing any irrelevant information from the data set. This primarily consists of the numerous ID numbers as well as a column for the date of the discovery of the star. Secondly, I rename the remaining columns for easier understanding of the data. I also changed the Class coolumn to a factor for easier data analysis. Finally, I removed all instances with incomplete data.
+
+```{r}
+sdf <- subset(sdf, select = -c(obj_ID, run_ID, rerun_ID, field_ID, spec_obj_ID, MJD, fiber_ID))
+names(sdf) <- c("Alpha", "Delta", "Ultraviolet", "Green", "Red", "Near-Infrared", "Infrared", "Camera", "Class", "Redshift", "Plate")
+sdf$Class <- as.factor(sdf$Class)
+sdf <- sdf[complete.cases(sdf), ]
+
+```
+
+##Data Exploration: 
+
+A small introduction to the data set we are working with. Here there is the first and last 6 elements in the dataset are displayed, a summary of the data, and every column with the name and the data type. 
+
+```{r}
+head(sdf)
+tail(sdf)
+summary(sdf)
+str(sdf)
+```
+
+These are two histograms comparing the Alpha and the Delta values to map and relationship between the two.
+
+```{r}
+par(mfrow=c(1,2))
+hist(sdf$Alpha)
+hist(sdf$Delta)
+```
+
+
+##Linear Regression:
+
+First, I created a Linear Regression Model based on all the predictors. 
+
+```{r}
+split1 <- sample(1:nrow(sdf), nrow(sdf)*0.75, replace=FALSE)
+train <- sdf[split1, ]
+test  <- sdf[-split1, ]
+slm <- lm(Alpha~., data = train)
+summary(slm)
+```
+
+Based on the summary, we can see that the R-squared value is 0.01 (really bad) and the F-statistic value is 47.8 (really good). 
+
+```{r}
+par(mfrow=c(2,2))
+plot(slm)
+```
+
+These are graphs made using the Linear Regression Model
+  Residuals VS Fitted: We want to see a straight, red line, however there is a lot of bend suggesting heavy variation in our                        data 
+  Normal Q-Q: We want to see a straight line that sits right along the dotted line, however we do not see that.
+  Scale- Location: We want to see a horizontal line  with evenly spaced data on both sides, however we do not see that.
+  Residuals VS Leverage: This graphs says what leverage points are influencing the line of regression.
+  
+Using the  summary of the data above, I selected the best predictors, Delta, Ultraviolet, and Plate, and created a Linear Model using only those three to test if I will yield better results
+
+```{r}
+bslm <- lm(Alpha~Delta+Ultraviolet+Plate, data = train)
+summary(bslm)
+```
+
+As shown above, the R-squared value stayed relatively the same, however, the F-statistic value increased tremendously to 151.5, showing some improvement. 
+
+```{r}
+par(mfrow=c(2,2))
+plot(bslm)
+```
+
+When compairing the two sets of graphs, there is very little to no improvement at all between the two models. 
+
+Metrics from Linear Reg Model with all data:
+```{r}
+pred <- predict(slm, newdata = test)
+cor <- cor(pred, test$Alpha)
+mse <- mean((pred - test$Alpha)^2)
+rmse <- sqrt(mse)
+print(paste("Correlation: ", cor))
+print(paste("MSE: ", mse))
+print(paste("RMSE: ", rmse))
+```
+
+Metrics from Linear Reg model with *** data:
+```{r}
+pred <- predict(bslm, newdata = test)
+cor <- cor(pred, test$Alpha)
+mse <- mean((pred - test$Alpha)^2)
+rmse <- sqrt(mse)
+print(paste("Correlation: ", cor))
+print(paste("MSE: ", mse))
+print(paste("RMSE: ", rmse))
+```
+
+Based on the numbers shown above, the Model made with only the best predictors performed slightly better than the model will all predictors. However, with a Correlation of 13% and a RSME of 95.8, this model is not a reliable model to make predictions on. 
+
+
+##kNN: 
+
+My second algorithm is the kNN algorithm. Before building the models, I first test to see which value of K yields the best results. Any value after 11 crashed, so I capped the value to 11.
+
+You will also notice that I re-split the data into train/test. That is because I needed to change the Class variable to numeric for the kNN model. So after I made that change, I re-split the data into new train/test models using the new variable type. 
+
+```{r}
+library(caret)
+set.seed(1234)
+sdf$Class <- as.numeric(sdf$Class)
+split <- sample(1:nrow(sdf), nrow(sdf)*0.75, replace=FALSE)
+train <- sdf[split1, ]
+test  <- sdf[-split1, ]
+cor <- rep(0, 11)
+mse <- rep(0, 11)
+i <- 1
+for (k in seq(1, 21, 2)){
+  fit <- knnreg(train[,2:11], train[,1], k=k)
+  pred <- predict(fit, test[,2:11])
+  cor[i] <- cor(pred, test$Alpha)
+  mse[i] <- mean((pred-test$Alpha)^2)
+  print(paste("k=", k, cor[i], mse[i]))
+  i <- i + 1
+}
+plot(1:11, cor, lwd=2, col='red', ylab="",yaxt='n')
+par (new=TRUE)
+plot(1:11, mse, lwd=2, col='blue', labels=FALSE, ylab="",yaxt='n')
+```
+
+As shown in the graph above, the k value that yielded the best results was 2, which is uncommon. I now will use this to build a kNN model on my dataset. 
+
+```{r}
+fit <- knnreg(train[,2:11], train[,1], k=2)
+pred <- predict(fit, test[,2:11])
+cor <- cor(pred, test$Alpha)
+mse <- mean((pred-test$Alpha)^2)
+rmse <- sqrt(mse)
+print(paste("Correlation: ", cor))
+print(paste("MSE: ", mse))
+print(paste("RMSE: ", rmse))
+```
+
+The results above shows that the kNN model is a very good model to base predictions on. Even though the RSME value is still very high, it is significantly lower than the linear regression model. In addition, the correlation is at a 93%, which is extremely well. 
+
+Next, I scaled the data set and built a kNN model using the scaled data. 
+
+Scaling data:
+
+```{r}
+trainscaled <- train[,2:11]
+testscaled <- test[,2:11]
+means <- sapply(trainscaled, mean)
+stddev <- sapply(trainscaled, sd)
+trainscaled <- scale(trainscaled, center = means, scale = stddev)
+testscaled <- scale(testscaled, center = means, scale = stddev)
+```
+
+Applying knn to scaled data:
+
+```{r}
+fit <- knnreg(trainscaled, train[,1], k=2)
+pred <- predict(fit, testscaled)
+cor <- cor(pred, test$Alpha)
+mse <- mean((pred-test$Alpha)^2)
+rmse <- sqrt(mse)
+print(paste("Correlation: ", cor))
+print(paste("MSE: ", mse))
+print(paste("RMSE: ", rmse))
+```
+
+The results of this is unconventional since scaling the dataset usually yields better results. However, it is very clear that the un-scaled version of the kNN model returned much better results than the scaled version. 
+
+
+##Decision Trees:
+
+The last algorithm I used is the decision trees algorithm. Since I already split the data into train/test, I do not need to repeat that step and can just go straight into calculation. 
+
+```{r}
+library(rpart)
+set.seed(1234)
+stree <- rpart(Alpha~., method = "anova", data = train)
+summary(stree)
+```
+
+
+```{r}
+pred <- predict(stree, newdata = test)
+cor <- cor(pred, test$Alpha)
+mse <- mean((pred-test$Alpha)^2)
+rmse <- sqrt(mse)
+print(paste("Correlation: ", cor))
+print(paste("MSE: ", mse))
+print(paste("RMSE: ", rmse))
+```
+
+Even though this model outperformed the linear regression model, it still fell short to the kNN. 
+
+```{r}
+plot(stree)
+text(stree, cex=0.5, pretty = 0)
+```
+
+
+Results:
+
+The ranking for the best to worst algorithms for this particular data set is as follows:
+
+1. kNN with Unscaled Data
+2. Decision Trees
+3. Modified Linear Regression
+
+kNN with unscaled data performed the best for my dataset. With a correlation of 93%, it out performed its counterpart - kNN with scaled data with a correlation of 20%. It also outperformed Decision trees, which had a correlation of 48% and the both Linear regression models, the non-optimized model with a correlation of 5% and the optimized version of the model with a correlation of 13%. 
+
+
+
+
+
